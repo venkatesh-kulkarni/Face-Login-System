@@ -1,0 +1,244 @@
+{% extends 'base.html' %}
+
+
+{% block head %}
+
+
+<style>
+    #progressbar-outer {
+        height: 2em;
+        border: 5px solid #000;
+        width: 15em;
+    }
+
+    #progressbar {
+        width: 0%;
+        background-color: #F00;
+        height: 100%;
+    }
+</style>
+{% endblock head %}
+
+{% block content %}
+
+
+
+
+{{request.user.username}}
+{{request.user.facedata.count}}
+{% comment %} {{request.user.facedata.encodings}} {% endcomment %}
+
+<div class="contentarea">
+    <h1>
+        <i class="fa fa-spinner fa-spin"></i>Verifying
+    </h1>
+
+
+    <div class="container">
+        <div id='progressbar-outer' style="">
+            <div id='progressbar' style=""></div>
+        </div>
+    </div>
+
+
+    <div id="camera_capture">
+        <div class="camera">
+            <video id="video">Video stream not available.</video>
+        </div>
+
+
+
+        <div><button class="btn btn-primary" id="startbutton">Take photo</button></div>
+        <canvas id="canvas"></canvas>
+        <div class="output">
+            <img id="photo" alt="The screen capture will appear in this box.">
+        </div>
+    </div>
+</div>
+
+
+{% endblock content %}
+
+
+
+{% block scripts %}
+
+
+
+<script>
+    /* JS comes here */
+    (function () {
+
+        var width = 320; // We will scale the photo width to this
+        var height = 0; // This will be computed based on the input stream
+
+        var streaming = false;
+
+        var video = null;
+        var canvas = null;
+        var photo = null;
+        var startbutton = null;
+
+        function startup() {
+            video = document.getElementById('video');
+            canvas = document.getElementById('canvas');
+            photo = document.getElementById('photo');
+            startbutton = document.getElementById('startbutton');
+
+            navigator.mediaDevices.getUserMedia({
+                video: true,
+                audio: false
+            })
+                .then(function (stream) {
+                    video.srcObject = stream;
+                    video.play();
+                })
+                .catch(function (err) {
+                    console.log("An error occurred: " + err);
+                });
+
+            video.addEventListener('canplay', function (ev) {
+                if (!streaming) {
+                    height = video.videoHeight / (video.videoWidth / width);
+
+                    if (isNaN(height)) {
+                        height = width / (4 / 3);
+                    }
+
+                    video.setAttribute('width', width);
+                    video.setAttribute('height', height);
+                    canvas.setAttribute('width', width);
+                    canvas.setAttribute('height', height);
+                    streaming = true;
+                }
+            }, false);
+
+            startbutton.addEventListener('click', function (ev) {
+                takepicture();
+                ev.preventDefault();
+            }, false);
+
+            clearphoto();
+        }
+
+
+        function clearphoto() {
+            var context = canvas.getContext('2d');
+            context.fillStyle = "#AAA";
+            context.fillRect(0, 0, canvas.width, canvas.height);
+
+            var data = canvas.toDataURL('image/png');
+            photo.setAttribute('src', data);
+        }
+
+        function takepicture() {
+            var context = canvas.getContext('2d');
+            if (width && height) {
+                canvas.width = width;
+                canvas.height = height;
+                context.drawImage(video, 0, 0, width, height);
+
+                var data = canvas.toDataURL('image/png');
+                {% comment %} console.log(data); {% endcomment %}
+                console.log("image captured.\n sending it to the server...");
+
+                sendImage(data);
+                photo.setAttribute('src', data);
+
+            } else {
+                clearphoto();
+            }
+        }
+
+        window.addEventListener('load', startup, false);
+
+        function toggel_button() {
+            if (startbutton.disabled) {
+                startbutton.disabled = false;
+                startbutton.innerHTML = "Take photo";
+            } else {
+                startbutton.disabled = true;
+                startbutton.innerHTML = `<i class="fa fa-spinner fa-spin"></i>Processing`;
+            }
+        }
+
+        function sendImage(dataURL) {
+            toggel_button();
+            fetch('/register_face', {
+                method: 'post',
+                headers: {
+                    'Accept': 'application/json, text/plain, */*',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ imageBase64: dataURL })
+            }).then(res => res.json())
+                .then(res => {
+                    toggel_button();
+                    if (res.success) {
+                        update_progressbar(res.count, check_registeration_status);
+                    }
+                    else {
+                        alert("error");
+                    }
+                });
+        }
+    })();
+
+
+
+    var progressbar = {};
+
+    $(function () {
+
+        progressbar = {
+
+            /** initial progress */
+            progress: 0,
+
+            /** maximum width of progressbar */
+            progress_max: 0,
+
+            /** The inner element of the progressbar (filled box). */
+            $progress_bar: $('#progressbar'),
+
+            /** Method to set the progressbar.
+             */
+            set: function (num) {
+                if (this.progress_max && num) {
+                    this.progress = num / this.progress_max * 100;
+                    console.log('percent: ' + this.progress + '% - ' + num + '/' + this.progress_max);
+                    this.$progress_bar.width(String(this.progress) + '%');
+                }
+            }
+
+        };
+
+    });
+
+    var update_progressbar = function (n, callbackFn) {
+        progressbar.set(n * 20);
+        callbackFn(n);
+    }
+    function check_registeration_status(count) {
+        if (count >= 5) {
+            camera_capture = document.getElementById('camera_capture');
+            camera_capture.style.display = "none";
+            alert("Your registartion was successfully completed! You will be redirected to login page");
+            window.location = "{% url 'home:signin' %}";
+        }
+    }
+    $(function () {
+        var iterations = 100;
+
+        progressbar.progress_max = iterations;
+        var k = parseInt({{ request.user.facedata.count }});
+    console.log(k)
+    update_progressbar(k, check_registeration_status);
+
+});
+
+
+</script>
+
+
+{% endblock scripts %}

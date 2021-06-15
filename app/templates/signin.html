@@ -1,0 +1,212 @@
+{% extends 'base.html' %}
+
+{% block head %}
+<title>
+Login
+</title>
+
+{% endblock head %}
+
+{% block content %}
+<div class="container">
+
+
+  
+  {% if user_exists %}
+    <div class="contentarea">
+
+
+        <br> 
+        <br> 
+        <br> 
+        
+        <div class="container">
+            <div id='progressbar-outer' style="">
+                <div id='progressbar' style=""></div>
+            </div>
+        </div>
+
+
+            <div id="camera_capture">
+                <div class="camera">
+                    <video id="video">Video stream not available.</video>
+                </div>
+                    <h1>
+                    <i class="fa fa-spinner fa-spin"></i>Verifying
+                    </h1>
+
+
+                <div><button class="btn btn-primary" id="startbutton">Take photo</button></div>
+                <canvas id="canvas"></canvas>
+                <div class="output">
+                    <img id="photo"  alt="The screen capture will appear in this box.">
+                </div>
+            </div>
+    </div>
+
+
+
+
+{%else%}
+
+<form class="mt-5" method="get">
+    <i style="color:red;">{{form_error}} </i>
+<div class="input-group mb-3">
+    <div class="input-group-prepend">
+        <span class="input-group-text" id="username">@</span>
+    </div>
+    <input type="text" class="form-control" name="username" placeholder="Username" aria-label="Username" aria-describedby="username">
+    </div>
+    <button type="submit" class="btn btn-primary">Verify </button>
+</form>
+  
+  
+
+  {% endif %}
+
+</div>
+
+
+{% endblock content%}
+
+{% block scripts %}
+
+
+<script>
+/* JS comes here */
+    (function() {
+
+        var width = 320; // We will scale the photo width to this
+        var height = 0; // This will be computed based on the input stream
+
+        var streaming = false;
+
+        var video = null;
+        var canvas = null;
+        var photo = null;
+        var startbutton = null;
+
+        function startup() {
+            video = document.getElementById('video');
+            canvas = document.getElementById('canvas');
+            photo = document.getElementById('photo');
+            startbutton = document.getElementById("startbutton")
+            navigator.mediaDevices.getUserMedia({
+                    video: true,
+                    audio: false
+                })
+                .then(function(stream) {
+                    video.srcObject = stream;
+                    video.play();
+                })
+                .catch(function(err) {
+                    console.log("An error occurred: " + err);
+                });
+                
+            video.addEventListener('canplay', function(ev) {
+                if (!streaming) {
+                    height = video.videoHeight / (video.videoWidth / width);
+
+                    if (isNaN(height)) {
+                        height = width / (4 / 3);
+                    }
+
+                    video.setAttribute('width', width);
+                    video.setAttribute('height', height);
+                    canvas.setAttribute('width', width);
+                    canvas.setAttribute('height', height);
+                    streaming = true;
+                }
+            }, false);
+            startbutton.addEventListener('click', function(ev) {
+                takepicture();
+                ev.preventDefault();
+            }, false);
+            clearphoto();
+        }
+
+
+        function clearphoto() {
+            var context = canvas.getContext('2d');
+            context.fillStyle = "#AAA";
+            context.fillRect(0, 0, canvas.width, canvas.height);
+
+            var data = canvas.toDataURL('image/png');
+            photo.setAttribute('src', data);
+        }
+
+        function takepicture() {
+            alert("take picture");
+            var context = canvas.getContext('2d');
+            if (width && height) {
+                canvas.width = width;
+                canvas.height = height;
+                context.drawImage(video, 0, 0, width, height);
+
+                var data = canvas.toDataURL('image/png');
+                {% comment %} console.log(data); {% endcomment %}
+                console.log("image captured.\n sending it to the server...");
+                
+                sendImage(data);
+                
+                photo.setAttribute('src', data);
+            } else {
+                alert("clearing the picture");
+                clearphoto();
+            }
+        }
+
+        window.addEventListener('load', startup, false);
+
+    function toggel_button(){
+        if(startbutton.disabled){
+            startbutton.disabled=false;
+            startbutton.innerHTML="Take photo";
+        } else{
+            startbutton.disabled=true;
+            startbutton.innerHTML=`<i class="fa fa-spinner fa-spin"></i>Processing`;
+        }
+    }
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const username = urlParams.get('username');
+    function  sendImage(dataURL){
+        alert("sending the image");
+      fetch('/recognize', {
+        method: 'post',
+        headers: {
+          'Accept': 'application/json, text/plain, */*',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({username:username,imageBase64:dataURL})
+      }).then(res=>res.json())
+        .then(res => {
+            if(res.success){
+                console.log(res);   
+            }
+            else{
+                alert("error");
+                console.log(res);
+            }
+            });
+          }
+
+
+var vid = document.getElementById("video");
+vid.oncanplay = function() {
+    alert("Can start playing video");
+
+    setTimeout(function(){takepicture()},2000);
+    {%  comment %} takepicture() {% endcomment %}
+    //alert("sdsad");
+};  
+          
+    })();
+    
+
+       </script>
+
+
+
+{% endblock scripts %}
+
